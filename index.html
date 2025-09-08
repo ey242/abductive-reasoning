@@ -128,15 +128,15 @@ const PRACTICE = [
     context: `We were excited for our roadtrip from Florida to Michigan. We packed up all our stuff and loaded them into the truck. We left early in the morning to make the most of our time. Driving, eating, and sleeping were the only reasons we would stop.`,
     outcome: `We decided to return home instead.`,
     feedbackHtml: `In this case, it is an <strong>uncommonsense</strong> scenario. You would want to rate it <strong>&lt; 6</strong>.<br>
-      You could add an explanation so the outcome makes sense, e.g.:<br>
-      <em>We were making good time when the truck engine broke down and it became a major mechanical issue.</em>`
+      You should add an explanation so the outcome makes sense, e.g.:<br>
+      <em>We were making good time when the truck engine broke down and we could not drive much further.</em>`
   },
   {
     variant: 'commonsense',
     context: `We were excited for our roadtrip from Florida to Michigan. We packed up all our stuff and loaded them into the truck. We left early in the morning to make the most of our time. Driving, eating, and sleeping were the only reasons we would stop.`,
-    outcome: `We made it to Michigan in todays.`,
+    outcome: `We made it to Michigan in two days.`,
     feedbackHtml: `In this case, it is a <strong>commonsense</strong> scenario. You would want to rate it <strong>&gt; 6</strong>.<br>
-      No additional explanation is needed to connect the context to the outcome.`
+      No additional explanation is needed to connect the context to the outcome for it to make sense.`
   }
 ];
 
@@ -150,16 +150,24 @@ function getParamBool(name){ const v=new URLSearchParams(location.search).get(na
 
 /* ---------- CSV helpers ---------- */
 function indexRows(rows){
-  const byId=new Map();
-  for(const r of rows){
-    const sid=parseInt(norm(r['source_index']),10);
-    if(!Number.isFinite(sid)) continue;
-    const cs=norm(r['commonsense_context']);
-    const ucs=norm(r['uncommonsense_context']);
-    const out=norm(r['outcome']);
-    if(!hasText(out)) continue;
-    if(!hasText(cs) && !hasText(ucs)) continue;
-    byId.set(sid,{source_index:sid,commonsense_context:cs,uncommonsense_context:ucs,outcome:out});
+  const byId = new Map();
+  for (const r of rows){
+    const sid = parseInt(norm(r['source_index']), 10);
+    if (!Number.isFinite(sid)) continue;
+
+    const cs  = norm(r['commonsense_context']);
+    const ucs = norm(r['uncommonsense_context']);
+    const out = norm(r['outcome']);
+
+    if (!hasText(out)) continue;
+    if (!hasText(cs) && !hasText(ucs)) continue;
+
+    byId.set(sid, {
+      source_index: sid,
+      commonsense_context: cs,
+      uncommonsense_context: ucs,
+      outcome: out
+    });
   }
   return byId;
 }
@@ -208,10 +216,16 @@ function assignTrialsDeterministic(byId, ids, seed, flip){
   if (needUCS > 0 && !flipSome('commonsense','uncommonsense', needUCS))
     throw new Error('Not enough dual-variant trials among fixedIds to reach 10 uncommonsense after flipping.');
 
-  const trials = items.map(x=>{
-    const ctx = x.variant==='commonsense' ? x.row.commonsense_context : x.row.uncommonsense_context;
-    return { source_index: x.id, variant: x.variant, context: ctx, outcome: x.row.outcome };
-  });
+const trials = items.map(x=>{
+  const ctx = x.variant==='commonsense' ? x.row.commonsense_context : x.row.uncommonsense_context;
+
+  // NEW: guard against empty context for selected variant
+  if (!hasText(ctx)) {
+    throw new Error(`Selected variant (“${x.variant}”) has empty context for ID ${x.id}. Check CSV headers/values.`);
+  }
+
+  return { source_index: x.id, variant: x.variant, context: ctx, outcome: x.row.outcome };
+});
 
   function rng(seed0){ let t=seed0>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; }
   const R = rng(seed ^ (flip?0x9E3779B1:0));
@@ -428,7 +442,18 @@ async function loadCSV(){
   const res = await fetch(CONFIG.csvFile);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = decodeLatin1(new Uint8Array(await res.arrayBuffer()));
-  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+
+  // Normalize headers: strip BOM, trim, lower-case, replace spaces with "_"
+  const parsed = Papa.parse(text, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: h => h
+      .replace(/^\uFEFF/, '')   // remove BOM if present
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+  });
+
   state.byId = indexRows(parsed.data);
 }
 
