@@ -149,15 +149,50 @@ function getParamInt(name){ const v=new URLSearchParams(location.search).get(nam
 function getParamBool(name){ const v=new URLSearchParams(location.search).get(name); if(v===null) return null; return /^(1|true|yes)$/i.test(v); }
 
 /* ---------- CSV helpers ---------- */
-function indexRows(rows){
+function detectColumns(headers){
+  // headers already normalized by transformHeader (lowercase, underscores)
+  const set = new Set(headers);
+  const has = k => set.has(k);
+
+  // Try common spellings for each field
+  const sidKey = ['source_index','source_id','id','index','trial_id','sourceid'].find(has);
+
+  // outcome-like
+  const outcomeKey =
+    headers.find(h => /^(outcome|ending|result|hypothesis|hypo)$/.test(h)) ||
+    headers.find(h => /outcome|ending|result|hypo/.test(h));
+
+  // commonsense-like
+  const csKey =
+    headers.find(h => /(common|commonsense).*context/.test(h)) ||
+    headers.find(h => /context.*(common|commonsense)/.test(h)) ||
+    headers.find(h => /^commonsense$/.test(h));
+
+  // uncommonsense-like
+  const ucsKey =
+    headers.find(h => /(uncommon|uncommonsense).*context/.test(h)) ||
+    headers.find(h => /context.*(uncommon|uncommonsense)/.test(h)) ||
+    headers.find(h => /^uncommonsense$/.test(h));
+
+  if (!sidKey || !outcomeKey || (!csKey && !ucsKey)) {
+    throw new Error(
+      `Could not find required columns.\n` +
+      `Headers seen: ${headers.join(', ')}\n` +
+      `Need at least: source_index/id, outcome, and one of commonsense/uncommonsense contexts.`
+    );
+  }
+  return { sidKey, csKey, ucsKey, outcomeKey };
+}
+
+function indexRows(rows, cols){
   const byId = new Map();
   for (const r of rows){
-    const sid = parseInt(norm(r['source_index']), 10);
+    const sid = parseInt(norm(r[cols.sidKey]), 10);
     if (!Number.isFinite(sid)) continue;
 
-    const cs  = norm(r['commonsense_context']);
-    const ucs = norm(r['uncommonsense_context']);
-    const out = norm(r['outcome']);
+    const cs  = cols.csKey  ? norm(r[cols.csKey])  : '';
+    const ucs = cols.ucsKey ? norm(r[cols.ucsKey]) : '';
+    const out = norm(r[cols.outcomeKey]);
 
     if (!hasText(out)) continue;
     if (!hasText(cs) && !hasText(ucs)) continue;
@@ -443,18 +478,22 @@ async function loadCSV(){
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const text = decodeLatin1(new Uint8Array(await res.arrayBuffer()));
 
-  // Normalize headers: strip BOM, trim, lower-case, replace spaces with "_"
   const parsed = Papa.parse(text, {
     header: true,
     skipEmptyLines: true,
     transformHeader: h => h
-      .replace(/^\uFEFF/, '')   // remove BOM if present
+      .replace(/^\uFEFF/, '')  // strip BOM
       .trim()
       .toLowerCase()
-      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9]+/g, '_') // collapse punctuation/spaces to _
   });
 
-  state.byId = indexRows(parsed.data);
+  const headers = parsed.meta && parsed.meta.fields ? parsed.meta.fields : Object.keys(parsed.data[0]||{});
+  const cols = detectColumns(headers);
+  console.log('CSV columns detected:', cols, 'All headers:', headers);
+
+  // build map using detected columns, but normalize object keys for the rest of the app
+  state.byId = indexRows(parsed.data, cols);
 }
 
 async function finishAndSave(){
