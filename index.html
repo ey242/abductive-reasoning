@@ -41,8 +41,8 @@
       <div class="info">
         <p><strong>Instructions.</strong> You will see <strong>20 trials</strong>. Each trial shows a <em>context</em> and an <em>outcome</em>. Rate how sensible the outcome is given the context on a <strong>0–10 scale</strong> (0 = does not make sense at all; 10 = completely makes sense).</p>
         <ul>
-          <li>If you rate <strong>&lt; 5</strong>, add a brief explanation that links the Context to the Outcome so the writing makes sense.</li>
-          <li>You may earn a <strong>$0.01 bonus per trial</strong> if you rate appropriately: <em>commonsense</em> trials are expected to be <strong>≥ 5</strong>; <em>uncommonsense</em> trials are expected to be <strong>&lt; 5</strong>.</li>
+          <li>If you rate <strong>&lt; 6</strong>, add a brief explanation that links the Context to the Outcome so the writing makes sense.</li>
+          <li>You may earn a <strong>$0.01 bonus per trial</strong> if you rate appropriately: <em>commonsense</em> trials are expected to be <strong>≥ 6</strong>; <em>uncommonsense</em> trials are expected to be <strong>&lt; 6</strong>.</li>
           <li>Explanations should be straightforward and minimal, but submissions may be <strong>rejected</strong> if there is insufficient effort.</li>
         </ul>
       </div>
@@ -78,7 +78,7 @@
       <div class="progress" id="progressText">Trial 1 of 20</div>
       <div id="trialHost"></div>
       <div class="foot">
-        <div class="small">Rating required. If rating &lt; 5, add a brief explanation (≥ <span id="minChars"></span> characters).</div>
+        <div class="small">Rating required. If rating &lt; 6, add a brief explanation (≥ <span id="minChars"></span> characters).</div>
         <div><button id="nextBtn">Next</button></div>
       </div>
     </div>
@@ -100,11 +100,11 @@ const CONFIG = {
     14,15,17,18,19,21,23,24,26
   ],
   seed: 42,                                 // default seed (overridden by ?seed=)
-  flipVariants: false,                      // default flip (overridden by ?flip=1)
+  flipVariants: true,                      // default flip (overridden by ?flip=1)
   submitUrl: '',                            // optional endpoint to POST JSON
   effortMinChars: 30,                       // min explanation length when rating < 5
-  bonusCommonsenseMin: 5,                   // CS “appropriate” if rating >= this
-  bonusUncommonsenseMax: 4                  // UCS “appropriate” if rating <= this
+  bonusCommonsenseMin: 6,                   // CS “appropriate” if rating >= this
+  bonusUncommonsenseMax: 5                  // UCS “appropriate” if rating <= this
 };
 /* ------------------------------------- */
 
@@ -232,9 +232,9 @@ function buildTrialHTML(/*t, idx*/){
       </div>
       <div id="rateReq" class="req">Please provide a rating.</div>
 
-      <label>Explanation (required if rating &lt; 5)</label>
-      <textarea id="explain" placeholder="Add a brief reason if you rated below 5..."></textarea>
-      <div id="expReq" class="req">Please add a brief explanation (≥ <span id="minChars"></span> characters) for ratings below 5.</div>
+      <label>Explanation (required if rating &lt; 6)</label>
+      <textarea id="explain" placeholder="Add a brief reason if you rated below 6..."></textarea>
+      <div id="expReq" class="req">Please add a brief explanation (≥ <span id="minChars"></span> characters) for ratings below 6.</div>
     </div>
   `;
 }
@@ -257,14 +257,14 @@ function renderCurrentTrial(){
       if (state.firstRatingTs === null) state.firstRatingTs = performance.now();
       const val = parseInt(r.value,10);
       const exp = document.getElementById('explain').value.trim();
-      document.getElementById('expReq').style.display = (val < 5 && exp.length < CONFIG.effortMinChars) ? 'block' : 'none';
+      document.getElementById('expReq').style.display = (val < 6 && exp.length < CONFIG.effortMinChars) ? 'block' : 'none';
     });
   });
 
   document.getElementById('explain').addEventListener('input', () => {
     const checked = document.querySelector('input[name="rating"]:checked');
     const val = checked ? parseInt(checked.value,10) : null;
-    if (val !== null && val < 5) {
+    if (val !== null && val < 6) {
       const ok = document.getElementById('explain').value.trim().length >= CONFIG.effortMinChars;
       document.getElementById('expReq').style.display = ok ? 'none' : 'block';
     }
@@ -303,7 +303,7 @@ function nextTrialOrFinish(){
   if (!checked){ document.getElementById('rateReq').style.display = 'block'; return; }
   const rating = parseInt(checked.value,10);
   const explanation = document.getElementById('explain').value.trim();
-  if (rating < 5 && explanation.length < CONFIG.effortMinChars){
+  if (rating < 6 && explanation.length < CONFIG.effortMinChars){
     document.getElementById('expReq').style.display = 'block';
     return;
   }
