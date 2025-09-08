@@ -121,6 +121,19 @@ const CONFIG = {
   COMPLETION_CODE: 'C52RX9MG'
 };
 
+// const CONFIG = {
+//   csvFile: 'abductive-10.csv',    
+//   useAllRows: true,                
+//   nTrials: 200,                    
+//   seed: 42,
+//   flipVariants: false,
+//   effortMinChars: 30,
+//   bonusCommonsenseMin: 6,
+//   bonusUncommonsenseMax: 5,
+//   submitUrl: 'https://us-central1-goog24-02.cloudfunctions.net/saveToNewSheet',
+//   COMPLETION_CODE: 'C52RX9MG'
+// };
+
 /* -------- PRACTICE TRIALS + FEEDBACK (fixed text) -------- */
 const PRACTICE = [
   {
@@ -511,11 +524,11 @@ async function finishAndSave(){
   try{
     await saveDataToCSV();
     document.getElementById('receipt').innerHTML =
-      `<div><strong>Thanks!</strong> ${baseMsg} <br><span style="color:#065f46">Data saved successfully.</span><br><br><strong>Completion code:</strong> ${CONFIG.COMPLETION_CODE}</div>`;
+      `<div><strong>Thank you for your participation!</strong> ${baseMsg} <br><span style="color:#065f46">Data saved successfully.</span><br><br><strong>Completion code:</strong> ${CONFIG.COMPLETION_CODE}</div>`;
   }catch(e){
     console.error(e);
     document.getElementById('receipt').innerHTML =
-      `<div><strong>Thanks!</strong> ${baseMsg} <br><span style="color:#92400e">Error saving data: ${escapeHtml(e.message)}</span><br>Please contact the researcher with your Prolific ID.</div>`;
+      `<div><strong>Thank you for your participation!</strong> ${baseMsg} <br><span style="color:#92400e">Error saving data: ${escapeHtml(e.message)}</span><br>Please contact the researcher with your Prolific ID.</div>`;
   }
 }
 
@@ -539,7 +552,6 @@ async function finishAndSave(){
     alert(e.message);
     throw e;
   }
-  console.log('Example trial:', state.trials[0]);
 
   // start → practice flow
   document.getElementById('startBtn').addEventListener('click', ()=>{
