@@ -16,24 +16,16 @@
   label { font-weight: 600; display:block; margin: 4px 0; }
   input[type="text"], input[type="number"] { width: 280px; padding: 10px 12px; border:1px solid var(--br); border-radius: 10px; font: inherit; }
   .radio-row { display:flex; gap:14px; align-items:center; }
-  .pill { display:inline-block; font-size:12px; border-radius:999px; padding:2px 8px; background:var(--pill); border:1px solid var(--pillb); color:#3730a3; }
   .trial { border:1px solid var(--br); border-radius: 14px; padding: 14px; margin: 14px 0; }
-  .trial h3 { margin: 0 0 6px; font-size: 18px; }
   blockquote { background:#fafafa; border-left:4px solid #ddd; padding:8px 10px; margin:6px 0 10px; border-radius: 8px; }
   .rating { display:flex; gap:10px; flex-wrap: wrap; margin: 6px 0 8px; }
   .rating label { font-weight: 500; display:flex; align-items:center; gap:6px; }
   textarea { width:100%; min-height:70px; resize: vertical; padding:10px 12px; border:1px solid var(--br); border-radius: 10px; font: inherit; }
   button { background:var(--accent); color:#fff; border:none; border-radius: 12px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
-  .ghost { background:#fff; color: var(--accent); border: 1px solid var(--accent); }
-  .bar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap: wrap; }
   .req { color:#b91c1c; font-size: 13px; display:none; margin-top: 6px; }
-  .ok { color:#065f46; }
-  .warn { color:#92400e; }
   .small { font-size: 13px; color: var(--muted); }
-  .sp { height: 10px; }
-  .hidden { display:none !important; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   .progress { font-size: 14px; color: var(--muted); }
+  .hidden { display:none !important; }
   .foot { display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top: 14px; flex-wrap: wrap; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" crossorigin="anonymous"></script>
@@ -53,7 +45,6 @@
           <li>You may earn a <strong>$0.01 bonus per trial</strong> if you rate appropriately: <em>commonsense</em> trials are expected to be <strong>≥ 5</strong>; <em>uncommonsense</em> trials are expected to be <strong>&lt; 5</strong>.</li>
           <li>Explanations should be straightforward and minimal, but submissions may be <strong>rejected</strong> if there is insufficient effort.</li>
         </ul>
-        <p class="small">Your responses will be shown at the end as JSON (and can be POSTed to a server if configured).</p>
       </div>
 
       <div class="row">
@@ -77,8 +68,7 @@
         <div id="genderReq" class="req">Please select F or M.</div>
       </div>
 
-      <div class="bar">
-        <div class="small">CSV: <span class="mono" id="csvName">abductive-10.csv</span> · <span id="counts" class="small"></span></div>
+      <div class="row" style="display:flex;justify-content:flex-end;">
         <button id="startBtn">Start</button>
       </div>
     </div>
@@ -89,18 +79,14 @@
       <div id="trialHost"></div>
       <div class="foot">
         <div class="small">Rating required. If rating &lt; 5, add a brief explanation (≥ <span id="minChars"></span> characters).</div>
-        <div>
-          <button id="nextBtn">Next</button>
-        </div>
+        <div><button id="nextBtn">Next</button></div>
       </div>
     </div>
 
     <!-- SCREEN: FINISH -->
     <div id="screen-finish" class="hidden">
       <div id="receipt" class="info"></div>
-      <div class="row">
-        <button id="copyJsonBtn" class="ghost">Copy JSON</button>
-      </div>
+      <div class="row"><button id="copyJsonBtn">Copy JSON</button></div>
     </div>
   </div>
 </div>
@@ -113,20 +99,23 @@ const CONFIG = {
     0,1,3,4,5,6,7,8,10,11,12,
     14,15,17,18,19,21,23,24,26
   ],
-  seed: 42,                                 // reproducible split/order
-  submitUrl: '',                            // optional: endpoint to receive JSON (e.g., Apps Script)
-  effortMinChars: 30,                        // min explanation length when rating < 5
-  bonusCommonsenseMin: 5,                   // commonsense “appropriate” if rating >= this
-  bonusUncommonsenseMax: 4                  // uncommonsense “appropriate” if rating <= this
+  seed: 42,                                 // default seed (overridden by ?seed=)
+  flipVariants: false,                      // default flip (overridden by ?flip=1)
+  submitUrl: '',                            // optional endpoint to POST JSON
+  effortMinChars: 30,                       // min explanation length when rating < 5
+  bonusCommonsenseMin: 5,                   // CS “appropriate” if rating >= this
+  bonusUncommonsenseMax: 4                  // UCS “appropriate” if rating <= this
 };
 /* ------------------------------------- */
 
 function decodeLatin1(uint8){ return new TextDecoder('iso-8859-1').decode(uint8); }
-function mulberry32(seed){ let t=seed>>>0; return function(){ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; }
 function norm(s){ return (s??'').toString().trim(); }
 function hasText(s){ return norm(s).length>0; }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+function getParamInt(name){ const v=new URLSearchParams(location.search).get(name); const n=parseInt(v,10); return Number.isFinite(n)?n:null; }
+function getParamBool(name){ const v=new URLSearchParams(location.search).get(name); if(v===null) return null; return /^(1|true|yes)$/i.test(v); }
 
+/* ---------- CSV helpers ---------- */
 function indexRows(rows){
   const byId=new Map();
   for(const r of rows){
@@ -142,44 +131,70 @@ function indexRows(rows){
   return byId;
 }
 
-function selectFixedTrials(byId, ids, seed){
+/* ---------- Deterministic variant rule (supports flip) ---------- */
+function hashBool(seed, id){
+  // simple 32-bit mix; returns true/false deterministically per (seed,id)
+  let x = (seed ^ (id * 0x45d9f3b)) >>> 0;
+  x = (x ^ (x >>> 15)) * 0x45d9f3b >>> 0;
+  x = (x ^ (x >>> 15)) >>> 0;
+  return (x & 1) === 1; // true/false
+}
+
+function assignTrialsDeterministic(byId, ids, seed, flip){
   if(ids.length!==20) throw new Error('CONFIG.fixedIds must contain exactly 20 integers.');
-  const rng=mulberry32(seed ?? Math.floor(Math.random()*1e9));
-  const avail=ids.filter(i=>byId.has(i));
+  const avail = ids.filter(i=>byId.has(i));
   if(avail.length!==20) throw new Error('Some fixedIds not found in CSV or invalid.');
 
-  const csPool=avail.filter(i=>hasText(byId.get(i).commonsense_context));
-  const ucsPool=avail.filter(i=>hasText(byId.get(i).uncommonsense_context));
+  // initial assignment
+  const items = avail.map(id=>{
+    const row = byId.get(id);
+    const hasCS = hasText(row.commonsense_context);
+    const hasUCS = hasText(row.uncommonsense_context);
+    let variant;
+    if (hasCS && hasUCS){
+      const bit = hashBool(seed, id) ^ (flip?1:0);
+      variant = bit ? 'uncommonsense' : 'commonsense';
+    } else if (hasCS){ variant = 'commonsense'; }
+    else if (hasUCS){ variant = 'uncommonsense'; }
+    else { throw new Error(`ID ${id} has no usable context.`); }
+    return { id, row, variant, hasBoth: hasCS && hasUCS };
+  });
 
-  function shuffled(a){ const arr=a.slice(); for(let i=arr.length-1;i>0;i--){const j=Math.floor(rng()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+  // rebalance to exactly 10 CS / 10 UCS using only items that have both variants
+  let cs = items.filter(x=>x.variant==='commonsense').length;
+  let ucs = 20 - cs;
+  const needCS = 10 - cs;   // positive => need to flip some UCS->CS
+  const needUCS = 10 - ucs; // positive => need to flip some CS->UCS
 
-  const chosen=new Set(); const csChosen=[]; const ucsChosen=[];
-  for(const id of shuffled(csPool)){ if(csChosen.length===10) break; if(chosen.has(id)) continue; csChosen.push(id); chosen.add(id); }
-  for(const id of shuffled(ucsPool)){ if(ucsChosen.length===10) break; if(chosen.has(id)) continue; ucsChosen.push(id); chosen.add(id); }
-
-  function fill(list,target,prefer){
-    const pool=shuffled(avail);
-    for(const id of pool){
-      if(list.length>=target) break;
-      if(chosen.has(id)) continue;
-      const row=byId.get(id);
-      if(prefer==='cs' && hasText(row.commonsense_context)){ list.push(id); chosen.add(id); }
-      if(prefer==='ucs' && hasText(row.uncommonsense_context)){ list.push(id); chosen.add(id); }
+  function flipSome(fromVariant, toVariant, count){
+    if(count<=0) return true;
+    // deterministic order: ascending id
+    const pool = items.filter(x=>x.variant===fromVariant && x.hasBoth).sort((a,b)=>a.id-b.id);
+    for(let i=0;i<pool.length && count>0;i++){
+      pool[i].variant = toVariant;
+      count--;
     }
-  }
-  if(csChosen.length<10) fill(csChosen,10,'cs');
-  if(ucsChosen.length<10) fill(ucsChosen,10,'ucs');
-  if(csChosen.length<10 || ucsChosen.length<10){
-    throw new Error('Among fixedIds, not enough contexts to form 10 commonsense and 10 uncommonsense. Replace some IDs or relax the 10/10 rule.');
+    return count===0;
   }
 
-  const trials=[];
-  for(const id of csChosen){ const r=byId.get(id); trials.push({source_index:id,variant:'commonsense',context:r.commonsense_context,outcome:r.outcome}); }
-  for(const id of ucsChosen){ const r=byId.get(id); trials.push({source_index:id,variant:'uncommonsense',context:r.uncommonsense_context,outcome:r.outcome}); }
+  if (needCS > 0 && !flipSome('uncommonsense','commonsense', needCS)) {
+    throw new Error('Not enough dual-variant trials among fixedIds to reach 10 commonsense after flipping. Replace some IDs.');
+  }
+  if (needUCS > 0 && !flipSome('commonsense','uncommonsense', needUCS)) {
+    throw new Error('Not enough dual-variant trials among fixedIds to reach 10 uncommonsense after flipping. Replace some IDs.');
+  }
 
-  const order=trials.map((_,i)=>i);
-  for(let i=order.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
-  return order.map(i=>trials[i]);
+  // build trial objects, then shuffle presentation order deterministically
+  const trials = items.map(x=>{
+    const ctx = x.variant==='commonsense' ? x.row.commonsense_context : x.row.uncommonsense_context;
+    return { source_index: x.id, variant: x.variant, context: ctx, outcome: x.row.outcome };
+  });
+
+  // shuffle order by seed (stable)
+  function rng(seed0){ let t=seed0>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; }
+  const R = rng(seed ^ (flip?0x9E3779B1:0)); // different order when flipped
+  for(let i=trials.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); [trials[i],trials[j]]=[trials[j],trials[i]]; }
+  return trials;
 }
 
 function computeBonusOk(variant, rating){
@@ -192,9 +207,9 @@ const state = {
   trials: [],
   i: 0,
   participant: { pid:'', age:null, gender:null },
-  answers: [],  // [{... per trial ...}]
-  trialStartTs: null,      // performance.now() when trial i is shown
-  firstRatingTs: null      // performance.now() when first rating is clicked
+  answers: [],
+  trialStartTs: null,
+  firstRatingTs: null
 };
 
 /* --------------- UI helpers --------------- */
@@ -202,26 +217,24 @@ function show(id){ document.getElementById(id).classList.remove('hidden'); }
 function hide(id){ document.getElementById(id).classList.add('hidden'); }
 function setText(id,t){ document.getElementById(id).textContent = t; }
 
-function buildTrialHTML(t, idx){
+function buildTrialHTML(/*t, idx*/){
+  // No #ID or variant shown to participants
   return `
     <div class="trial">
-      <h3>Trial ${idx+1} <span class="pill">#${t.source_index} · ${t.variant}</span></h3>
       <label>Context</label>
-      <blockquote>${escapeHtml(t.context)}</blockquote>
+      <blockquote id="ctx"></blockquote>
       <label>Outcome</label>
-      <blockquote>${escapeHtml(t.outcome)}</blockquote>
+      <blockquote id="out"></blockquote>
 
       <label>Your rating (0–10)</label>
-      <div class="rating" role="radiogroup" aria-label="rating ${idx+1}">
-        ${Array.from({length:11},(_,v)=>v).map(v=>`
-          <label><input type="radio" name="rating" value="${v}"> ${v}</label>
-        `).join('')}
+      <div class="rating" role="radiogroup" aria-label="rating">
+        ${Array.from({length:11},(_,v)=>v).map(v=>`<label><input type="radio" name="rating" value="${v}"> ${v}</label>`).join('')}
       </div>
       <div id="rateReq" class="req">Please provide a rating.</div>
 
       <label>Explanation (required if rating &lt; 5)</label>
       <textarea id="explain" placeholder="Add a brief reason if you rated below 5..."></textarea>
-      <div id="expReq" class="req">Please add a brief explanation (≥ ${CONFIG.effortMinChars} characters) for ratings below 5.</div>
+      <div id="expReq" class="req">Please add a brief explanation (≥ <span id="minChars"></span> characters) for ratings below 5.</div>
     </div>
   `;
 }
@@ -229,31 +242,25 @@ function buildTrialHTML(t, idx){
 function renderCurrentTrial(){
   const t = state.trials[state.i];
   setText('progressText', `Trial ${state.i+1} of ${state.trials.length}`);
-  document.getElementById('trialHost').innerHTML = buildTrialHTML(t, state.i);
+  const host = document.getElementById('trialHost');
+  host.innerHTML = buildTrialHTML();
+  document.getElementById('ctx').textContent = t.context;
+  document.getElementById('out').textContent = t.outcome;
   setText('minChars', CONFIG.effortMinChars.toString());
 
-  // reset timers for this trial
   state.trialStartTs = performance.now();
   state.firstRatingTs = null;
 
-  // rating change handlers
   document.querySelectorAll('input[name="rating"]').forEach(r => {
     r.addEventListener('change', () => {
       document.getElementById('rateReq').style.display = 'none';
-      if (state.firstRatingTs === null) {
-        state.firstRatingTs = performance.now();  // reading time captured here
-      }
+      if (state.firstRatingTs === null) state.firstRatingTs = performance.now();
       const val = parseInt(r.value,10);
       const exp = document.getElementById('explain').value.trim();
-      if (val < 5 && exp.length < CONFIG.effortMinChars) {
-        document.getElementById('expReq').style.display = 'block';
-      } else {
-        document.getElementById('expReq').style.display = 'none';
-      }
+      document.getElementById('expReq').style.display = (val < 5 && exp.length < CONFIG.effortMinChars) ? 'block' : 'none';
     });
   });
 
-  // text input live validation when needed
   document.getElementById('explain').addEventListener('input', () => {
     const checked = document.querySelector('input[name="rating"]:checked');
     const val = checked ? parseInt(checked.value,10) : null;
@@ -266,18 +273,11 @@ function renderCurrentTrial(){
 
 /* --------------- Flow --------------- */
 async function loadCSV(){
-  document.getElementById('csvName').textContent = CONFIG.csvFile;
-  try{
-    const res = await fetch(CONFIG.csvFile);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = decodeLatin1(new Uint8Array(await res.arrayBuffer()));
-    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-    state.byId = indexRows(parsed.data);
-    setText('counts', `(${state.byId.size} usable rows)`);
-  }catch(err){
-    setText('counts', `Failed to load CSV (${err.message}). Ensure this page is served over http/https and the CSV sits next to it.`);
-    throw err;
-  }
+  const res = await fetch(CONFIG.csvFile);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = decodeLatin1(new Uint8Array(await res.arrayBuffer()));
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  state.byId = indexRows(parsed.data);
 }
 
 function validateWelcome(){
@@ -299,12 +299,8 @@ function validateWelcome(){
 }
 
 function nextTrialOrFinish(){
-  // gather current trial response
   const checked = document.querySelector('input[name="rating"]:checked');
-  if (!checked){
-    document.getElementById('rateReq').style.display = 'block';
-    return;
-  }
+  if (!checked){ document.getElementById('rateReq').style.display = 'block'; return; }
   const rating = parseInt(checked.value,10);
   const explanation = document.getElementById('explain').value.trim();
   if (rating < 5 && explanation.length < CONFIG.effortMinChars){
@@ -319,7 +315,7 @@ function nextTrialOrFinish(){
   state.answers.push({
     index_displayed: state.i + 1,
     source_index: t.source_index,
-    variant: t.variant,
+    variant: t.variant,                    // stored, not shown to the participant
     rating,
     explanation,
     read_ms_until_first_rating: readMs,
@@ -328,7 +324,6 @@ function nextTrialOrFinish(){
     outcome_shown: t.outcome
   });
 
-  // advance
   state.i += 1;
   if (state.i < state.trials.length){
     renderCurrentTrial();
@@ -338,9 +333,7 @@ function nextTrialOrFinish(){
 }
 
 async function finish(){
-  hide('screen-trial');
-  show('screen-finish');
-
+  hide('screen-trial'); show('screen-finish');
   const bonusCount = state.answers.reduce((s,a)=>s + (a.appropriate_bonus?1:0), 0);
   const payload = {
     participant_id: state.participant.pid,
@@ -357,16 +350,15 @@ async function finish(){
     try{
       const resp = await fetch(CONFIG.submitUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       if (!resp.ok) throw new Error(`Server responded ${resp.status}`);
-      msg += ` <span class="ok small">Your responses were submitted successfully.</span>`;
+      msg += ` <span class="small" style="color:#065f46">Submitted successfully.</span>`;
     }catch(e){
-      msg += ` <span class="warn small">Could not reach the server (${e.message}). You can copy JSON below and send it manually.</span>`;
+      msg += ` <span class="small" style="color:#92400e">Could not reach the server. Copy JSON below and send it manually.</span>`;
       console.error(e);
     }
   } else {
     msg += ` <span class="small">No server configured. Click “Copy JSON” to save your responses.</span>`;
   }
   document.getElementById('receipt').innerHTML = `<div class="info">${msg}</div>`;
-
   document.getElementById('copyJsonBtn').onclick = ()=>{
     const json = JSON.stringify(payload,null,2);
     navigator.clipboard.writeText(json).then(()=>{
@@ -377,26 +369,29 @@ async function finish(){
 
 /* --------------- Boot --------------- */
 (async function boot(){
-  await loadCSV();
+  try { await loadCSV(); } catch(e){
+    alert('Failed to load CSV. Serve this page over http/https and place abductive-10.csv next to it.'); throw e;
+  }
 
-  // build trials from fixedIds now so start is instant
+  // Read URL overrides
+  const urlSeed = getParamInt('seed');
+  const urlFlip = getParamBool('flip');
+  const seed = (urlSeed ?? CONFIG.seed) >>> 0;
+  const flip = (urlFlip ?? CONFIG.flipVariants) === true;
+
+  // Build trials deterministically from fixed IDs
   try{
-    state.trials = selectFixedTrials(state.byId, CONFIG.fixedIds, CONFIG.seed);
+    state.trials = assignTrialsDeterministic(state.byId, CONFIG.fixedIds, seed, flip);
   }catch(e){
-    // show error on welcome screen
-    const c = document.getElementById('counts');
-    c.textContent = e.message;
     document.getElementById('startBtn').disabled = true;
-    return;
+    alert(e.message);
+    throw e;
   }
 
   document.getElementById('startBtn').addEventListener('click', ()=>{
     if (!validateWelcome()) return;
-    hide('screen-welcome');
-    show('screen-trial');
-    renderCurrentTrial();
+    hide('screen-welcome'); show('screen-trial'); renderCurrentTrial();
   });
-
   document.getElementById('nextBtn').addEventListener('click', nextTrialOrFinish);
 })();
 </script>
