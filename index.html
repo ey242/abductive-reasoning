@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Context & Outcome Rating Task</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --w: 980px; --bg:#f7f7fb; --ink:#111827; --muted:#6b7280; --card:#fff; --br:#e5e7eb; --accent:#374151; --pill:#eef2ff; --pillb:#c7d2fe; }
+  body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; margin:0; background:var(--bg); color:var(--ink); }
+  .wrap { max-width: var(--w); margin: 24px auto 64px; padding: 0 16px; }
+  .card { background:var(--card); border:1px solid var(--br); border-radius: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.05); padding: 18px 20px; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .info { background:#f1f5ff; border:1px solid #dbe5ff; border-radius: 12px; padding: 12px 14px; margin: 10px 0 16px; }
+  .row { margin: 14px 0; }
+  label { font-weight: 600; display:block; margin: 4px 0; }
+  input[type="text"] { width: 280px; padding: 10px 12px; border:1px solid var(--br); border-radius: 10px; font: inherit; }
+  .pill { display:inline-block; font-size:12px; border-radius:999px; padding:2px 8px; background:var(--pill); border:1px solid var(--pillb); color:#3730a3; }
+  .trial { border:1px solid var(--br); border-radius: 14px; padding: 14px; margin: 14px 0; }
+  .trial h3 { margin: 0 0 6px; font-size: 18px; }
+  blockquote { background:#fafafa; border-left:4px solid #ddd; padding:8px 10px; margin:6px 0 10px; border-radius: 8px; }
+  .rating { display:flex; gap:10px; flex-wrap: wrap; margin: 6px 0 8px; }
+  .rating label { font-weight: 500; display:flex; align-items:center; gap:6px; }
+  textarea { width:100%; min-height:70px; resize: vertical; padding:10px 12px; border:1px solid var(--br); border-radius: 10px; font: inherit; }
+  button { background:var(--accent); color:#fff; border:none; border-radius: 12px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+  .ghost { background:#fff; color: var(--accent); border:1px solid var(--accent); }
+  .bar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap: wrap; }
+  .req { color:#b91c1c; font-size: 13px; display:none; margin-top: 6px; }
+  .ok { color:#065f46; }
+  .warn { color:#92400e; }
+  .foot { display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top: 14px; flex-wrap: wrap; }
+  .small { font-size: 13px; color: var(--muted); }
+  .sp { height: 10px; }
+  .hidden { display:none !important; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Context &amp; Outcome Rating Task</h1>
+    <div class="muted">Please read carefully and complete all trials.</div>
+
+    <div class="info">
+      <p><strong>Instructions.</strong> You will see <strong>20 trials</strong>. Each trial shows a <em>context</em> and an <em>outcome</em>. Rate how sensible the outcome is given the context on a <strong>0-10 scale</strong> (0 = does not make sense at all; 10 = completely makes sense).</p>
+      <ul>
+        <li>If you rate <strong>&lt; 5</strong>, add a short explanation (e.g., “contradiction”, “implausible effect”, “missing step”).</li>
+        <li>You may earn a <strong>$0.01 bonus per trial</strong> if you rate appropriately: <em>commonsense</em> trials are expected to be <strong>≥ 5</strong>; <em>uncommonsense</em> trials are expected to be <strong>&lt; 5</strong>.</li>
+        <li>Explanations should be straightforward and minimal, but submissions may be <strong>rejected</strong> if there is insufficient effort.</li>
+      </ul>
+      <p class="small">This page does not download files. On submit, it can POST your answers to a server (if configured by the researcher).</p>
+    </div>
+
+    <div class="row">
+      <label for="pid">Participant ID (required)</label>
+      <input id="pid" type="text" placeholder="e.g., worker123" />
+      <div id="pidReq" class="req">Please enter your Participant ID.</div>
+    </div>
+
+    <div class="bar">
+      <div class="small">
+        Loaded from <span class="mono" id="csvName">abductive-10.csv</span>.
+        <span id="counts" class="small"></span>
+      </div>
+      <div class="small"><span class="pill">Pinned</span> Using the 20 IDs defined inside this page.</div>
+    </div>
+
+    <div class="sp"></div>
+    <div id="task"></div>
+
+    <div class="foot">
+      <div class="small">Ensure every trial has a rating. Explanations are required for ratings under 5.</div>
+      <div>
+        <button id="submitBtn">Submit</button>
+        <button id="copyJsonBtn" class="ghost">Copy JSON</button>
+      </div>
+    </div>
+
+    <div id="receipt" class="row hidden"></div>
+  </div>
+</div>
+
+<script>
+/* -------- CONFIG (edit these) -------- */
+const CONFIG = {
+  csvFile: 'abductive-10.csv',              // file sits next to index.html
+  fixedIds: [                               // <<< PUT YOUR EXACT 20 source_index VALUES HERE
+    0,1,3,4,5,6,7,8,10,11,12,
+    14,15,17,18,19,21,23,24,26
+  ],
+  seed: 42,                                 // for reproducible split/order
+  submitUrl: '',                            // optional: set to your endpoint to receive JSON (e.g., Apps Script URL)
+  effortMinChars: 5,                        // min explanation length when rating < 5
+  bonusCommonsenseMin: 5,                   // CS trial “appropriate” if rating >= this
+  bonusUncommonsenseMax: 4                  // UCS trial “appropriate” if rating <= this
+};
+/* ------------------------------------- */
+
+function decodeLatin1(uint8) { return new TextDecoder('iso-8859-1').decode(uint8); }
+function mulberry32(seed){ let t=seed>>>0; return function(){ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; }
+function norm(s){ return (s??'').toString().trim(); }
+function hasText(s){ return norm(s).length>0; }
+function escapeHtml(s){ return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+function indexRows(rows){
+  const byId=new Map();
+  for(const r of rows){
+    const sid=parseInt(norm(r['source_index']),10);
+    if(!Number.isFinite(sid)) continue;
+    const cs=norm(r['commonsense_context']);
+    const ucs=norm(r['uncommonsense_context']);
+    const out=norm(r['outcome']);
+    if(!hasText(out)) continue;
+    if(!hasText(cs) && !hasText(ucs)) continue;
+    byId.set(sid,{source_index:sid,commonsense_context:cs,uncommonsense_context:ucs,outcome:out});
+  }
+  return byId;
+}
+
+function selectFixedTrials(byId, ids, seed){
+  // Use exactly these 20 IDs; assign 10 CS and 10 UCS (fallbacks if unavailable).
+  if(ids.length!==20) throw new Error('CONFIG.fixedIds must contain exactly 20 integers.');
+  const rng=mulberry32(seed ?? Math.floor(Math.random()*1e9));
+  const avail=ids.filter(i=>byId.has(i));
+  if(avail.length!==20) throw new Error('Some fixedIds not found in CSV or invalid.');
+
+  // Split into pools by availability
+  const csPool=avail.filter(i=>hasText(byId.get(i).commonsense_context));
+  const ucsPool=avail.filter(i=>hasText(byId.get(i).uncommonsense_context));
+
+  // Randomize order
+  function shuffled(a){ const arr=a.slice(); for(let i=arr.length-1;i>0;i--){const j=Math.floor(rng()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+
+  const chosen=new Set(); const csChosen=[]; const ucsChosen=[];
+  for(const id of shuffled(csPool)){ if(csChosen.length===10) break; if(chosen.has(id)) continue; csChosen.push(id); chosen.add(id); }
+  for(const id of shuffled(ucsPool)){ if(ucsChosen.length===10) break; if(chosen.has(id)) continue; ucsChosen.push(id); chosen.add(id); }
+
+  // If some IDs only have one variant available, try to rebalance using remaining overlap
+  function fill(list,target,prefer){
+    const pool=shuffled(avail);
+    for(const id of pool){
+      if(list.length>=target) break;
+      if(chosen.has(id)) continue;
+      const row=byId.get(id);
+      if(prefer==='cs' && hasText(row.commonsense_context)){ list.push(id); chosen.add(id); }
+      if(prefer==='ucs' && hasText(row.uncommonsense_context)){ list.push(id); chosen.add(id); }
+    }
+  }
+  if(csChosen.length<10) fill(csChosen,10,'cs');
+  if(ucsChosen.length<10) fill(ucsChosen,10,'ucs');
+
+  if(csChosen.length<10 || ucsChosen.length<10){
+    throw new Error('Among the 20 fixedIds, there are not enough contexts to form 10 commonsense and 10 uncommonsense. Replace some IDs or relax the 10/10 requirement.');
+  }
+
+  const trials=[];
+  for(const id of csChosen){ const r=byId.get(id); trials.push({source_index:id,variant:'commonsense',context:r.commonsense_context,outcome:r.outcome}); }
+  for(const id of ucsChosen){ const r=byId.get(id); trials.push({source_index:id,variant:'uncommonsense',context:r.uncommonsense_context,outcome:r.outcome}); }
+
+  // Shuffle presentation order
+  const order=trials.map((_,i)=>i);
+  for(let i=order.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+  return order.map(i=>trials[i]);
+}
+
+function computeBonusOk(variant, rating){
+  return variant==='commonsense' ? (rating>=CONFIG.bonusCommonsenseMin) : (rating<=CONFIG.bonusUncommonsenseMax);
+}
+
+function renderTrials(trials){
+  const task=document.getElementById('task');
+  task.innerHTML='';
+  trials.forEach((t,idx)=>{
+    const el=document.createElement('div');
+    el.className='trial';
+    el.dataset.index=idx.toString();
+    el.innerHTML=`
+      <h3>Trial ${idx+1} <span class="pill">#${t.source_index} · ${t.variant}</span></h3>
+      <label>Context</label>
+      <blockquote>${escapeHtml(t.context)}</blockquote>
+      <label>Outcome</label>
+      <blockquote>${escapeHtml(t.outcome)}</blockquote>
+      <label>Your rating (1–7)</label>
+      <div class="rating" role="radiogroup" aria-label="rating ${idx+1}">
+        ${[1,2,3,4,5,6,7].map(v=>`<label><input type="radio" name="rating_${idx}" value="${v}"> ${v}</label>`).join('')}
+      </div>
+      <div id="rateReq_${idx}" class="req">Please provide a rating.</div>
+      <label>Explanation (required if rating &lt; 5)</label>
+      <textarea name="explain_${idx}" placeholder="Add a brief reason if you rated below 5..."></textarea>
+      <div id="expReq_${idx}" class="req">Please add a brief explanation (≥ ${CONFIG.effortMinChars} characters) for ratings below 5.</div>
+    `;
+    task.appendChild(el);
+    el.querySelectorAll(`input[name="rating_${idx}"]`).forEach(r=>r.addEventListener('change',()=>{
+      document.getElementById(`rateReq_${idx}`).style.display='none';
+      const val=currentRating(idx);
+      if(val!==null && val<5){
+        const ta=document.querySelector(`textarea[name="explain_${idx}"]`);
+        if(ta && !ta.value.trim()) ta.placeholder="Rating < 5 — please add a brief explanation.";
+      }
+    }));
+  });
+}
+
+function currentRating(i){ const radios=document.getElementsByName(`rating_${i}`); for(const r of radios) if(r.checked) return parseInt(r.value,10); return null; }
+function explanationText(i){ const t=document.getElementsByName(`explain_${i}`)[0]; return t ? t.value.trim() : ''; }
+
+(async function main(){
+  document.getElementById('csvName').textContent = CONFIG.csvFile;
+
+  // Load CSV
+  const res=await fetch(CONFIG.csvFile);
+  if(!res.ok){ document.getElementById('counts').innerHTML=`<span class="warn">Could not load CSV (${res.status}). Ensure <span class="mono">${CONFIG.csvFile}</span> sits next to this page.</span>`; return; }
+  const text=decodeLatin1(new Uint8Array(await res.arrayBuffer()));
+  const parsed=Papa.parse(text,{header:true,skipEmptyLines:true});
+  const byId=indexRows(parsed.data);
+  document.getElementById('counts').textContent=`(${byId.size} usable rows found)`;
+
+  // Build trials from fixedIds
+  let trials;
+  try{
+    trials=selectFixedTrials(byId, CONFIG.fixedIds, CONFIG.seed);
+  }catch(e){
+    document.getElementById('task').innerHTML = `<div class="warn">${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  renderTrials(trials);
+
+  // Submit handler
+  document.getElementById('submitBtn').addEventListener('click', async ()=>{
+    const pid=document.getElementById('pid').value.trim();
+    if(!pid){ document.getElementById('pidReq').style.display='block'; return; }
+    document.getElementById('pidReq').style.display='none';
+
+    let ok=true, bonusCount=0, answers=[];
+    for(let i=0;i<trials.length;i++){
+      const r=currentRating(i);
+      if(r===null){ document.getElementById(`rateReq_${i}`).style.display='block'; ok=false; }
+      else { document.getElementById(`rateReq_${i}`).style.display='none'; }
+      if(r!==null && r<5){
+        const expl=explanationText(i);
+        if(expl.length<CONFIG.effortMinChars){ document.getElementById(`expReq_${i}`).style.display='block'; ok=false; }
+        else document.getElementById(`expReq_${i}`).style.display='none';
+      } else document.getElementById(`expReq_${i}`).style.display='none';
+    }
+    if(!ok) return;
+
+    const ts=new Date().toISOString();
+    for(let i=0;i<trials.length;i++){
+      const t=trials[i];
+      const rating=currentRating(i);
+      const explanation=explanationText(i);
+      const appropriate=computeBonusOk(t.variant, rating) ? 1 : 0;
+      bonusCount+=appropriate;
+      answers.push({
+        participant_id: pid,
+        submitted_at_utc: ts,
+        index_displayed: i+1,
+        source_index: t.source_index,
+        variant: t.variant,
+        rating,
+        explanation,
+        appropriate_bonus: appropriate,
+        context_shown: t.context,
+        outcome_shown: t.outcome
+      });
+    }
+
+    // Build payload
+    const payload = {
+      participant_id: pid,
+      submitted_at_utc: new Date().toISOString(),
+      bonus_cents: bonusCount,
+      n_trials: trials.length,
+      trials: answers
+    };
+
+    let msgHtml = `<div class="info"><strong>Thanks!</strong> You completed ${trials.length} trials. Potential bonus: <strong>$${(bonusCount*0.01).toFixed(2)}</strong>.</div>`;
+    // If submitUrl is set, POST JSON there
+    if(CONFIG.submitUrl){
+      try{
+        const resp = await fetch(CONFIG.submitUrl, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if(!resp.ok) throw new Error(`Server responded ${resp.status}`);
+        msgHtml += `<div class="ok small">Your responses were submitted successfully.</div>`;
+      }catch(err){
+        msgHtml += `<div class="warn small">Could not reach the server. You can still click “Copy JSON” to send your responses manually.</div>`;
+        console.error(err);
+      }
+    } else {
+      msgHtml += `<div class="small">No server is configured. Click “Copy JSON” and send it as instructed.</div>`;
+    }
+    const rc=document.getElementById('receipt');
+    rc.classList.remove('hidden');
+    rc.innerHTML = msgHtml;
+
+    // Wire copy JSON
+    document.getElementById('copyJsonBtn').onclick = ()=>{
+      navigator.clipboard.writeText(JSON.stringify(payload,null,2)).then(()=>{
+        const b=document.getElementById('copyJsonBtn'); b.textContent='JSON copied!'; setTimeout(()=>b.textContent='Copy JSON',1800);
+      });
+    };
+  });
+})();
+</script>
+</body>
+</html>
