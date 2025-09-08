@@ -88,7 +88,7 @@
       <div class="progress" id="progressText">Trial 1 of 20</div>
       <div id="trialHost"></div>
       <div class="foot">
-        <div class="small">Rating required. If rating &lt; 5, add a brief explanation (≥ <span id="minChars"></span> chars).</div>
+        <div class="small">Rating required. If rating &lt; 5, add a brief explanation (≥ <span id="minChars"></span> characters).</div>
         <div>
           <button id="nextBtn">Next</button>
         </div>
@@ -115,7 +115,7 @@ const CONFIG = {
   ],
   seed: 42,                                 // reproducible split/order
   submitUrl: '',                            // optional: endpoint to receive JSON (e.g., Apps Script)
-  effortMinChars: 5,                        // min explanation length when rating < 5
+  effortMinChars: 30,                        // min explanation length when rating < 5
   bonusCommonsenseMin: 5,                   // commonsense “appropriate” if rating >= this
   bonusUncommonsenseMax: 4                  // uncommonsense “appropriate” if rating <= this
 };
