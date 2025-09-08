@@ -5,10 +5,10 @@
 <title>Context & Outcome Rating Task</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  :root { --w: 980px; --bg:#f7f7fb; --ink:#111827; --muted:#6b7280; --card:#fff; --br:#e5e7eb; --accent:#374151; --pill:#eef2ff; --pillb:#c7d2fe; }
+  :root { --w: 980px; --bg:#f7f7fb; --ink:#111827; --muted:#6b7280; --card:#fff; --br:#e5e7eb; --accent:#374151; }
   body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; margin:0; background:var(--bg); color:var(--ink); }
-  .wrap { max-width: var(--w); margin: 24px auto 64px; padding: 0 16px; }
-  .card { background:var(--card); border:1px solid var(--br); border-radius: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.05); padding: 18px 20px; }
+  .wrap { max-width: 980px; margin: 24px auto 64px; padding: 0 16px; }
+  .card { background:#fff; border:1px solid var(--br); border-radius: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.05); padding: 18px 20px; }
   h1 { margin: 0 0 6px; font-size: 22px; }
   .muted { color: var(--muted); font-size: 14px; }
   .info { background:#f1f5ff; border:1px solid #dbe5ff; border-radius: 12px; padding: 12px 14px; margin: 10px 0 16px; }
@@ -26,7 +26,8 @@
   .small { font-size: 13px; color: var(--muted); }
   .progress { font-size: 14px; color: var(--muted); }
   .hidden { display:none !important; }
-  .foot { display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top: 14px; flex-wrap: wrap; }
+  .foot { display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top:14px; flex-wrap:wrap; }
+  .center { display:flex; gap:12px; align-items:center; justify-content:flex-end; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" crossorigin="anonymous"></script>
 </head>
@@ -39,10 +40,10 @@
     <div id="screen-welcome">
       <div class="muted">Please read carefully and complete all trials.</div>
       <div class="info">
-        <p><strong>Instructions.</strong> You will see <strong>20 trials</strong>. Each trial shows a <em>context</em> and an <em>outcome</em>. Rate how much sense the outcome is given the context on a <strong>0–10 scale</strong> (0 = does not make sense at all; 10 = completely makes sense).</p>
+        <p><strong>Instructions.</strong> You will see <strong>2 practice trials</strong> followed by <strong>20 test trials</strong>. Each trial shows a <em>context</em> and an <em>outcome</em>. Rate how much sense the outcome makes given the context on a <strong>0–10 scale</strong> (0 = does not make sense at all; 10 = completely makes sense).</p>
         <ul>
-          <li>You may earn a <strong>$0.01 bonus per trial</strong> if you rate appropriately: <em>commonsense</em> trials (trials that make sense) are expected to be <strong>≥ 6</strong>; <em>uncommonsense</em> trials (trials that don't make sense somehow) are expected to be <strong>&lt; 6</strong>.</li>
-          <li>If you rate <strong>&lt; 6</strong>, add a brief explanation that links the Context to the Outcome so the writing makes sense.</li>
+          <li>You may earn a <strong>$0.01 bonus per trial</strong> if you rate appropriately: <em>commonsense</em> trials (make sense) are expected to be <strong>≥ 6</strong>; <em>uncommonsense</em> trials (don’t make sense) are expected to be <strong>&lt; 6</strong>.</li>
+          <li>If you rate <strong>&lt; 6</strong>, add a short explanation (≥ 30 chars) that links the context to the outcome so the writing makes sense.</li>
           <li>Explanations should be straightforward and minimal, but submissions may be <strong>rejected</strong> if there is insufficient effort.</li>
         </ul>
       </div>
@@ -68,17 +69,31 @@
         <div id="genderReq" class="req">Please select F or M.</div>
       </div>
 
-      <div class="row" style="display:flex;justify-content:flex-end;">
-        <button id="startBtn">Start</button>
+      <div class="center"><button id="startBtn">Start</button></div>
+    </div>
+
+    <!-- SCREEN: PRACTICE TRIAL -->
+    <div id="screen-practice" class="hidden">
+      <div class="progress" id="practiceProgress">Practice 1 of 2</div>
+      <div id="practiceHost"></div>
+      <div class="foot">
+        <div class="small">Rating required. If rating &lt; 6, add a brief explanation (≥ 30 characters).</div>
+        <div><button id="practiceNextBtn">Check</button></div>
       </div>
     </div>
 
-    <!-- SCREEN: TRIAL (one at a time) -->
+    <!-- SCREEN: PRACTICE FEEDBACK -->
+    <div id="screen-practice-feedback" class="hidden">
+      <div class="info" id="practiceFeedback"></div>
+      <div class="center"><button id="practiceContinueBtn">Continue</button></div>
+    </div>
+
+    <!-- SCREEN: MAIN TRIAL -->
     <div id="screen-trial" class="hidden">
       <div class="progress" id="progressText">Trial 1 of 20</div>
       <div id="trialHost"></div>
       <div class="foot">
-        <div class="small">Rating required. If rating &lt; 6, add a brief explanation (≥ <span id="minChars"></span> characters).</div>
+        <div class="small">Rating required. If rating &lt; 6, add a brief explanation (≥ <span id="minChars">30</span> characters).</div>
         <div><button id="nextBtn">Next</button></div>
       </div>
     </div>
@@ -86,28 +101,46 @@
     <!-- SCREEN: FINISH -->
     <div id="screen-finish" class="hidden">
       <div id="receipt" class="info"></div>
-      <div class="row"><button id="copyJsonBtn">Copy JSON</button></div>
     </div>
   </div>
 </div>
 
 <script>
-/* -------- CONFIG (edit these) -------- */
+/* ---------------- CONFIG ---------------- */
 const CONFIG = {
-  csvFile: 'abductive-10.csv',              // must be served over http/https
-  fixedIds: [                               // exactly 20 source_index values
-    0,1,3,4,5,6,7,8,10,11,12,
-    14,15,17,18,19,21,23,24,26
+  csvFile: 'abductive-10.csv',                // serve over http/https
+  fixedIds: [                                  // your 20 source_index values
+    0,1,3,4,5,6,7,8,10,11,12,14,15,17,18,19,21,23,24,26
   ],
-  seed: 42,                                 // default seed (overridden by ?seed=)
-  flipVariants: true,                      // default flip (overridden by ?flip=1)
-  submitUrl: '',                            // optional endpoint to POST JSON
-  effortMinChars: 30,                       // min explanation length when rating < 5
-  bonusCommonsenseMin: 6,                   // CS “appropriate” if rating >= this
-  bonusUncommonsenseMax: 5                  // UCS “appropriate” if rating <= this
+  seed: 42,                                    // default; override with ?seed=#
+  flipVariants: false,                         // default; override with ?flip=1
+  effortMinChars: 30,
+  bonusCommonsenseMin: 6,
+  bonusUncommonsenseMax: 5,
+  submitUrl: 'https://us-central1-goog24-02.cloudfunctions.net/saveToNewSheet', // << set this
+  COMPLETION_CODE: 'C52RX9MG'
 };
-/* ------------------------------------- */
 
+/* -------- PRACTICE TRIALS + FEEDBACK (fixed text) -------- */
+const PRACTICE = [
+  {
+    variant: 'uncommonsense',
+    context: `We were excited for our roadtrip from Florida to Michigan. We packed up all our stuff and loaded them into the truck. We left early in the morning to make the most of our time. Driving, eating, and sleeping were the only reasons we would stop.`,
+    outcome: `We decided to return home instead.`,
+    feedbackHtml: `In this case, it is an <strong>uncommonsense</strong> scenario. You would want to rate it <strong>&lt; 6</strong>.<br>
+      You could add an explanation so the outcome makes sense, e.g.:<br>
+      <em>We were making good time when the truck engine broke down and it became a major mechanical issue.</em>`
+  },
+  {
+    variant: 'commonsense',
+    context: `We were excited for our roadtrip from Florida to Michigan. We packed up all our stuff and loaded them into the truck. We left early in the morning to make the most of our time. Driving, eating, and sleeping were the only reasons we would stop.`,
+    outcome: `We made it to Michigan in todays.`,
+    feedbackHtml: `In this case, it is a <strong>commonsense</strong> scenario. You would want to rate it <strong>&gt; 6</strong>.<br>
+      No additional explanation is needed to connect the context to the outcome.`
+  }
+];
+
+/* ---------------- Utilities ---------------- */
 function decodeLatin1(uint8){ return new TextDecoder('iso-8859-1').decode(uint8); }
 function norm(s){ return (s??'').toString().trim(); }
 function hasText(s){ return norm(s).length>0; }
@@ -133,11 +166,10 @@ function indexRows(rows){
 
 /* ---------- Deterministic variant rule (supports flip) ---------- */
 function hashBool(seed, id){
-  // simple 32-bit mix; returns true/false deterministically per (seed,id)
   let x = (seed ^ (id * 0x45d9f3b)) >>> 0;
   x = (x ^ (x >>> 15)) * 0x45d9f3b >>> 0;
   x = (x ^ (x >>> 15)) >>> 0;
-  return (x & 1) === 1; // true/false
+  return (x & 1) === 1;
 }
 
 function assignTrialsDeterministic(byId, ids, seed, flip){
@@ -145,7 +177,6 @@ function assignTrialsDeterministic(byId, ids, seed, flip){
   const avail = ids.filter(i=>byId.has(i));
   if(avail.length!==20) throw new Error('Some fixedIds not found in CSV or invalid.');
 
-  // initial assignment
   const items = avail.map(id=>{
     const row = byId.get(id);
     const hasCS = hasText(row.commonsense_context);
@@ -160,39 +191,30 @@ function assignTrialsDeterministic(byId, ids, seed, flip){
     return { id, row, variant, hasBoth: hasCS && hasUCS };
   });
 
-  // rebalance to exactly 10 CS / 10 UCS using only items that have both variants
   let cs = items.filter(x=>x.variant==='commonsense').length;
   let ucs = 20 - cs;
-  const needCS = 10 - cs;   // positive => need to flip some UCS->CS
-  const needUCS = 10 - ucs; // positive => need to flip some CS->UCS
+  const needCS = 10 - cs;
+  const needUCS = 10 - ucs;
 
   function flipSome(fromVariant, toVariant, count){
     if(count<=0) return true;
-    // deterministic order: ascending id
     const pool = items.filter(x=>x.variant===fromVariant && x.hasBoth).sort((a,b)=>a.id-b.id);
-    for(let i=0;i<pool.length && count>0;i++){
-      pool[i].variant = toVariant;
-      count--;
-    }
+    for(let i=0;i<pool.length && count>0;i++){ pool[i].variant = toVariant; count--; }
     return count===0;
   }
 
-  if (needCS > 0 && !flipSome('uncommonsense','commonsense', needCS)) {
-    throw new Error('Not enough dual-variant trials among fixedIds to reach 10 commonsense after flipping. Replace some IDs.');
-  }
-  if (needUCS > 0 && !flipSome('commonsense','uncommonsense', needUCS)) {
-    throw new Error('Not enough dual-variant trials among fixedIds to reach 10 uncommonsense after flipping. Replace some IDs.');
-  }
+  if (needCS > 0 && !flipSome('uncommonsense','commonsense', needCS))
+    throw new Error('Not enough dual-variant trials among fixedIds to reach 10 commonsense after flipping.');
+  if (needUCS > 0 && !flipSome('commonsense','uncommonsense', needUCS))
+    throw new Error('Not enough dual-variant trials among fixedIds to reach 10 uncommonsense after flipping.');
 
-  // build trial objects, then shuffle presentation order deterministically
   const trials = items.map(x=>{
     const ctx = x.variant==='commonsense' ? x.row.commonsense_context : x.row.uncommonsense_context;
     return { source_index: x.id, variant: x.variant, context: ctx, outcome: x.row.outcome };
   });
 
-  // shuffle order by seed (stable)
   function rng(seed0){ let t=seed0>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; }
-  const R = rng(seed ^ (flip?0x9E3779B1:0)); // different order when flipped
+  const R = rng(seed ^ (flip?0x9E3779B1:0));
   for(let i=trials.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); [trials[i],trials[j]]=[trials[j],trials[i]]; }
   return trials;
 }
@@ -204,21 +226,21 @@ function computeBonusOk(variant, rating){
 /* ---------------- State ---------------- */
 const state = {
   byId: null,
-  trials: [],
-  i: 0,
+  trials: [],              // 20 main trials
+  i: 0,                    // main index
   participant: { pid:'', age:null, gender:null },
-  answers: [],
+
+  // timing
   trialStartTs: null,
-  firstRatingTs: null
+  firstRatingTs: null,
+
+  // collected answers
+  practiceAnswers: [],     // [{index, variant, rating, explanation, read_ms, context, outcome}]
+  answers: []              // main: [{index_displayed, source_index, variant, rating, explanation, read_ms, ...}]
 };
 
-/* --------------- UI helpers --------------- */
-function show(id){ document.getElementById(id).classList.remove('hidden'); }
-function hide(id){ document.getElementById(id).classList.add('hidden'); }
-function setText(id,t){ document.getElementById(id).textContent = t; }
-
-function buildTrialHTML(/*t, idx*/){
-  // No #ID or variant shown to participants
+/* ---------------- UI builders ---------------- */
+function buildTrialHTML(showMinChars=true){
   return `
     <div class="trial">
       <label>Context</label>
@@ -232,25 +254,16 @@ function buildTrialHTML(/*t, idx*/){
       </div>
       <div id="rateReq" class="req">Please provide a rating.</div>
 
-      <label>Explanation (required if rating &lt; 6)</label>
-      <textarea id="explain" placeholder="Add a brief reason if you rated below 6..."></textarea>
-      <div id="expReq" class="req">Please add a brief explanation (≥ <span id="minChars"></span> characters) for ratings below 6.</div>
+      <label>Add an explanation so the outcome makes sense given the context (required if rating &lt; 6)</label>
+      <textarea id="explain" placeholder="If you rated below 6, add a brief explanation so the outcome makes sense..."></textarea>
+      <div id="expReq" class="req">Please add a brief explanation ${showMinChars?`(≥ <span id="minChars">${CONFIG.effortMinChars}</span> characters)`:''} for ratings below 6.</div>
     </div>
   `;
 }
 
-function renderCurrentTrial(){
-  const t = state.trials[state.i];
-  setText('progressText', `Trial ${state.i+1} of ${state.trials.length}`);
-  const host = document.getElementById('trialHost');
-  host.innerHTML = buildTrialHTML();
-  document.getElementById('ctx').textContent = t.context;
-  document.getElementById('out').textContent = t.outcome;
-  setText('minChars', CONFIG.effortMinChars.toString());
-
+function startTrialTimers(){
   state.trialStartTs = performance.now();
   state.firstRatingTs = null;
-
   document.querySelectorAll('input[name="rating"]').forEach(r => {
     r.addEventListener('change', () => {
       document.getElementById('rateReq').style.display = 'none';
@@ -260,7 +273,6 @@ function renderCurrentTrial(){
       document.getElementById('expReq').style.display = (val < 6 && exp.length < CONFIG.effortMinChars) ? 'block' : 'none';
     });
   });
-
   document.getElementById('explain').addEventListener('input', () => {
     const checked = document.querySelector('input[name="rating"]:checked');
     const val = checked ? parseInt(checked.value,10) : null;
@@ -271,35 +283,70 @@ function renderCurrentTrial(){
   });
 }
 
-/* --------------- Flow --------------- */
-async function loadCSV(){
-  const res = await fetch(CONFIG.csvFile);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = decodeLatin1(new Uint8Array(await res.arrayBuffer()));
-  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-  state.byId = indexRows(parsed.data);
+/* ---------------- Rendering: Practice ---------------- */
+let practiceIndex = 0;
+function renderPracticeTrial(){
+  const host = document.getElementById('practiceHost');
+  host.innerHTML = buildTrialHTML(false);
+  const p = PRACTICE[practiceIndex];
+  document.getElementById('ctx').textContent = p.context;
+  document.getElementById('out').textContent = p.outcome;
+  document.getElementById('practiceProgress').textContent = `Practice ${practiceIndex+1} of ${PRACTICE.length}`;
+  startTrialTimers();
 }
 
-function validateWelcome(){
-  const pid = document.getElementById('pid').value.trim();
-  const ageVal = document.getElementById('age').value.trim();
-  const genderEl = document.querySelector('input[name="gender"]:checked');
-
-  let ok = true;
-  document.getElementById('pidReq').style.display = pid ? 'none' : 'block'; if (!pid) ok = false;
-  const ageNum = parseInt(ageVal,10);
-  const ageOk = Number.isFinite(ageNum) && ageNum >= 18 && ageNum <= 120;
-  document.getElementById('ageReq').style.display = ageOk ? 'none' : 'block'; if (!ageOk) ok = false;
-  document.getElementById('genderReq').style.display = genderEl ? 'none' : 'block'; if (!genderEl) ok = false;
-
-  if (ok){
-    state.participant = { pid, age: ageNum, gender: genderEl.value };
+function checkPracticeAndShowFeedback(){
+  const checked = document.querySelector('#screen-practice input[name="rating"]:checked');
+  if (!checked){ document.getElementById('rateReq').style.display = 'block'; return; }
+  const rating = parseInt(checked.value,10);
+  const explanation = document.getElementById('explain').value.trim();
+  if (rating < 6 && explanation.length < CONFIG.effortMinChars){
+    document.getElementById('expReq').style.display = 'block';
+    return;
   }
-  return ok;
+
+  const p = PRACTICE[practiceIndex];
+  const readMs = state.firstRatingTs === null ? null : Math.round(state.firstRatingTs - state.trialStartTs);
+  state.practiceAnswers.push({
+    index: practiceIndex+1,
+    variant: p.variant,
+    rating, explanation,
+    read_ms_until_first_rating: readMs,
+    context: p.context,
+    outcome: p.outcome
+  });
+
+  document.getElementById('practiceFeedback').innerHTML = p.feedbackHtml;
+  document.getElementById('screen-practice').classList.add('hidden');
+  document.getElementById('screen-practice-feedback').classList.remove('hidden');
 }
 
-function nextTrialOrFinish(){
-  const checked = document.querySelector('input[name="rating"]:checked');
+function continueAfterFeedback(){
+  document.getElementById('screen-practice-feedback').classList.add('hidden');
+  practiceIndex += 1;
+  if (practiceIndex < PRACTICE.length){
+    document.getElementById('screen-practice').classList.remove('hidden');
+    renderPracticeTrial();
+  } else {
+    // move to main trials
+    document.getElementById('screen-trial').classList.remove('hidden');
+    renderCurrentMainTrial();
+  }
+}
+
+/* ---------------- Rendering: Main ---------------- */
+function renderCurrentMainTrial(){
+  const t = state.trials[state.i];
+  document.getElementById('progressText').textContent = `Trial ${state.i+1} of ${state.trials.length}`;
+  const host = document.getElementById('trialHost');
+  host.innerHTML = buildTrialHTML(true);
+  document.getElementById('ctx').textContent = t.context;
+  document.getElementById('out').textContent = t.outcome;
+  startTrialTimers();
+}
+
+function nextMainTrialOrFinish(){
+  const checked = document.querySelector('#screen-trial input[name="rating"]:checked');
   if (!checked){ document.getElementById('rateReq').style.display = 'block'; return; }
   const rating = parseInt(checked.value,10);
   const explanation = document.getElementById('explain').value.trim();
@@ -315,9 +362,8 @@ function nextTrialOrFinish(){
   state.answers.push({
     index_displayed: state.i + 1,
     source_index: t.source_index,
-    variant: t.variant,                    // stored, not shown to the participant
-    rating,
-    explanation,
+    variant: t.variant,
+    rating, explanation,
     read_ms_until_first_rating: readMs,
     appropriate_bonus: appropriate,
     context_shown: t.context,
@@ -325,61 +371,98 @@ function nextTrialOrFinish(){
   });
 
   state.i += 1;
-  if (state.i < state.trials.length){
-    renderCurrentTrial();
-  } else {
-    finish();
-  }
+  if (state.i < state.trials.length) renderCurrentMainTrial();
+  else finishAndSave();
 }
 
-async function finish(){
-  hide('screen-trial'); show('screen-finish');
-  const bonusCount = state.answers.reduce((s,a)=>s + (a.appropriate_bonus?1:0), 0);
+/* ---------------- Save to Google (CSV to Drive via Cloud Fn) ---------------- */
+function buildCSVData(){
+  const header = [
+    'participant_id','age','gender','phase','trial_index',
+    'source_index','variant','rating','read_ms_until_first_rating',
+    'explanation','context','outcome','submitted_at_utc'
+  ];
+  const rows = [];
+  const ts = new Date().toISOString();
+
+  // practice rows
+  for (const p of state.practiceAnswers){
+    rows.push([
+      state.participant.pid, state.participant.age, state.participant.gender,
+      'practice', p.index, '', p.variant, p.rating,
+      p.read_ms_until_first_rating ?? '',
+      p.explanation ?? '', p.context, p.outcome, ts
+    ]);
+  }
+  // main rows
+  for (const a of state.answers){
+    rows.push([
+      state.participant.pid, state.participant.age, state.participant.gender,
+      'main', a.index_displayed, a.source_index, a.variant, a.rating,
+      a.read_ms_until_first_rating ?? '',
+      a.explanation ?? '', a.context_shown, a.outcome_shown, ts
+    ]);
+  }
+  return [header, ...rows];
+}
+
+async function saveDataToCSV(){
   const payload = {
-    participant_id: state.participant.pid,
-    age: state.participant.age,
-    gender: state.participant.gender,
-    submitted_at_utc: new Date().toISOString(),
-    n_trials: state.trials.length,
-    bonus_cents: bonusCount,
-    trials: state.answers
+    participantID: state.participant.pid || '',
+    data: buildCSVData()
   };
-
-  let msg = `<strong>Thanks!</strong> You completed ${state.trials.length} trials. Potential bonus: <strong>$${(bonusCount*0.01).toFixed(2)}</strong>.`;
-  if (CONFIG.submitUrl){
-    try{
-      const resp = await fetch(CONFIG.submitUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!resp.ok) throw new Error(`Server responded ${resp.status}`);
-      msg += ` <span class="small" style="color:#065f46">Submitted successfully.</span>`;
-    }catch(e){
-      msg += ` <span class="small" style="color:#92400e">Could not reach the server. Copy JSON below and send it manually.</span>`;
-      console.error(e);
-    }
-  } else {
-    msg += ` <span class="small">No server configured. Click “Copy JSON” to save your responses.</span>`;
+  const resp = await fetch(CONFIG.submitUrl, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok){
+    const text = await resp.text().catch(()=>String(resp.status));
+    throw new Error(text || `HTTP ${resp.status}`);
   }
-  document.getElementById('receipt').innerHTML = `<div class="info">${msg}</div>`;
-  document.getElementById('copyJsonBtn').onclick = ()=>{
-    const json = JSON.stringify(payload,null,2);
-    navigator.clipboard.writeText(json).then(()=>{
-      const b=document.getElementById('copyJsonBtn'); b.textContent='JSON copied!'; setTimeout(()=>b.textContent='Copy JSON',1800);
-    });
-  };
+  return resp.json().catch(()=>({ok:true}));
 }
 
-/* --------------- Boot --------------- */
+/* ---------------- Flow ---------------- */
+async function loadCSV(){
+  const res = await fetch(CONFIG.csvFile);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = decodeLatin1(new Uint8Array(await res.arrayBuffer()));
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  state.byId = indexRows(parsed.data);
+}
+
+async function finishAndSave(){
+  document.getElementById('screen-trial').classList.add('hidden');
+  document.getElementById('screen-finish').classList.remove('hidden');
+
+  const bonusCount = state.answers.reduce((s,a)=>s + (a.appropriate_bonus?1:0), 0);
+  const baseMsg = `You completed ${state.trials.length} test trials. Potential bonus: <strong>$${(bonusCount*0.01).toFixed(2)}</strong>.`;
+
+  try{
+    await saveDataToCSV();
+    document.getElementById('receipt').innerHTML =
+      `<div><strong>Thanks!</strong> ${baseMsg} <br><span style="color:#065f46">Data saved successfully.</span><br><br><strong>Completion code:</strong> ${CONFIG.COMPLETION_CODE}</div>`;
+  }catch(e){
+    console.error(e);
+    document.getElementById('receipt').innerHTML =
+      `<div><strong>Thanks!</strong> ${baseMsg} <br><span style="color:#92400e">Error saving data: ${escapeHtml(e.message)}</span><br>Please contact the researcher with your Prolific ID.</div>`;
+  }
+}
+
+/* ---------------- Boot ---------------- */
 (async function boot(){
   try { await loadCSV(); } catch(e){
     alert('Failed to load CSV. Serve this page over http/https and place abductive-10.csv next to it.'); throw e;
   }
 
-  // Read URL overrides
+  // seed/flip from URL
   const urlSeed = getParamInt('seed');
   const urlFlip = getParamBool('flip');
   const seed = (urlSeed ?? CONFIG.seed) >>> 0;
   const flip = (urlFlip ?? CONFIG.flipVariants) === true;
 
-  // Build trials deterministically from fixed IDs
+  // build main trials
   try{
     state.trials = assignTrialsDeterministic(state.byId, CONFIG.fixedIds, seed, flip);
   }catch(e){
@@ -388,11 +471,31 @@ async function finish(){
     throw e;
   }
 
+  // start → practice flow
   document.getElementById('startBtn').addEventListener('click', ()=>{
-    if (!validateWelcome()) return;
-    hide('screen-welcome'); show('screen-trial'); renderCurrentTrial();
+    const pid = document.getElementById('pid').value.trim();
+    const ageVal = document.getElementById('age').value.trim();
+    const genderEl = document.querySelector('input[name="gender"]:checked');
+
+    let ok = true;
+    document.getElementById('pidReq').style.display = pid ? 'none' : 'block'; if (!pid) ok=false;
+    const ageNum = parseInt(ageVal,10);
+    const ageOk = Number.isFinite(ageNum) && ageNum >= 18 && ageNum <= 120;
+    document.getElementById('ageReq').style.display = ageOk ? 'none' : 'block'; if (!ageOk) ok=false;
+    document.getElementById('genderReq').style.display = genderEl ? 'none' : 'block'; if (!genderEl) ok=false;
+
+    if (!ok) return;
+    state.participant = { pid, age: parseInt(ageVal,10), gender: genderEl.value };
+
+    document.getElementById('screen-welcome').classList.add('hidden');
+    document.getElementById('screen-practice').classList.remove('hidden');
+    practiceIndex = 0;
+    renderPracticeTrial();
   });
-  document.getElementById('nextBtn').addEventListener('click', nextTrialOrFinish);
+
+  document.getElementById('practiceNextBtn').addEventListener('click', checkPracticeAndShowFeedback);
+  document.getElementById('practiceContinueBtn').addEventListener('click', continueAfterFeedback);
+  document.getElementById('nextBtn').addEventListener('click', nextMainTrialOrFinish);
 })();
 </script>
 </body>
