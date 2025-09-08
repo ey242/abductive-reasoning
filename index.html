@@ -162,16 +162,16 @@ function detectColumns(headers){
     headers.find(h => /^(outcome|ending|result|hypothesis|hypo)$/.test(h)) ||
     headers.find(h => /outcome|ending|result|hypo/.test(h));
 
-  // commonsense-like
+  // commonsense-like (avoid matching "uncommonsense")
   const csKey =
-    headers.find(h => /(common|commonsense).*context/.test(h)) ||
-    headers.find(h => /context.*(common|commonsense)/.test(h)) ||
-    headers.find(h => /^commonsense$/.test(h));
+    headers.find(h => /(^|_)commonsense(_)?_?context($|_)/.test(h)) ||
+    headers.find(h => /^commonsense$/.test(h)) ||
+    headers.find(h => /(^|_)common(_)?_?context($|_)/.test(h));
 
   // uncommonsense-like
   const ucsKey =
-    headers.find(h => /(uncommon|uncommonsense).*context/.test(h)) ||
-    headers.find(h => /context.*(uncommon|uncommonsense)/.test(h)) ||
+    headers.find(h => /(^|_)uncommonsense(_)?_?context($|_)/.test(h)) ||
+    headers.find(h => /(^|_)uncommon(_)?_?context($|_)/.test(h)) ||
     headers.find(h => /^uncommonsense$/.test(h));
 
   if (!sidKey || !outcomeKey || (!csKey && !ucsKey)) {
@@ -310,24 +310,27 @@ function buildTrialHTML(showMinChars=true){
   `;
 }
 
-function startTrialTimers(){
+function startTrialTimers(root){
   state.trialStartTs = performance.now();
   state.firstRatingTs = null;
-  document.querySelectorAll('input[name="rating"]').forEach(r => {
+
+  root.querySelectorAll('input[name="rating"]').forEach(r => {
     r.addEventListener('change', () => {
-      document.getElementById('rateReq').style.display = 'none';
+      root.querySelector('#rateReq').style.display = 'none';
       if (state.firstRatingTs === null) state.firstRatingTs = performance.now();
       const val = parseInt(r.value,10);
-      const exp = document.getElementById('explain').value.trim();
-      document.getElementById('expReq').style.display = (val < 6 && exp.length < CONFIG.effortMinChars) ? 'block' : 'none';
+      const exp = root.querySelector('#explain').value.trim();
+      root.querySelector('#expReq').style.display =
+        (val < 6 && exp.length < CONFIG.effortMinChars) ? 'block' : 'none';
     });
   });
-  document.getElementById('explain').addEventListener('input', () => {
-    const checked = document.querySelector('input[name="rating"]:checked');
+
+  root.querySelector('#explain').addEventListener('input', () => {
+    const checked = root.querySelector('input[name="rating"]:checked');
     const val = checked ? parseInt(checked.value,10) : null;
     if (val !== null && val < 6) {
-      const ok = document.getElementById('explain').value.trim().length >= CONFIG.effortMinChars;
-      document.getElementById('expReq').style.display = ok ? 'none' : 'block';
+      const ok = root.querySelector('#explain').value.trim().length >= CONFIG.effortMinChars;
+      root.querySelector('#expReq').style.display = ok ? 'none' : 'block';
     }
   });
 }
@@ -338,19 +341,20 @@ function renderPracticeTrial(){
   const host = document.getElementById('practiceHost');
   host.innerHTML = buildTrialHTML(false);
   const p = PRACTICE[practiceIndex];
-  document.getElementById('ctx').textContent = p.context;
-  document.getElementById('out').textContent = p.outcome;
+  host.querySelector('#ctx').textContent = p.context;
+  host.querySelector('#out').textContent = p.outcome;
   document.getElementById('practiceProgress').textContent = `Practice ${practiceIndex+1} of ${PRACTICE.length}`;
-  startTrialTimers();
+  startTrialTimers(host);
 }
 
 function checkPracticeAndShowFeedback(){
-  const checked = document.querySelector('#screen-practice input[name="rating"]:checked');
-  if (!checked){ document.getElementById('rateReq').style.display = 'block'; return; }
+  const screen = document.getElementById('screen-practice');
+  const checked = screen.querySelector('input[name="rating"]:checked');
+  if (!checked){ screen.querySelector('#rateReq').style.display = 'block'; return; }
   const rating = parseInt(checked.value,10);
-  const explanation = document.getElementById('explain').value.trim();
+  const explanation = screen.querySelector('#explain').value.trim();
   if (rating < 6 && explanation.length < CONFIG.effortMinChars){
-    document.getElementById('expReq').style.display = 'block';
+    screen.querySelector('#expReq').style.display = 'block';
     return;
   }
 
@@ -389,18 +393,19 @@ function renderCurrentMainTrial(){
   document.getElementById('progressText').textContent = `Trial ${state.i+1} of ${state.trials.length}`;
   const host = document.getElementById('trialHost');
   host.innerHTML = buildTrialHTML(true);
-  document.getElementById('ctx').textContent = t.context;
-  document.getElementById('out').textContent = t.outcome;
-  startTrialTimers();
+  host.querySelector('#ctx').textContent = t.context;
+  host.querySelector('#out').textContent = t.outcome;
+  startTrialTimers(host);
 }
 
 function nextMainTrialOrFinish(){
-  const checked = document.querySelector('#screen-trial input[name="rating"]:checked');
-  if (!checked){ document.getElementById('rateReq').style.display = 'block'; return; }
+  const screen = document.getElementById('screen-trial');
+  const checked = screen.querySelector('input[name="rating"]:checked');
+  if (!checked){ screen.querySelector('#rateReq').style.display = 'block'; return; }
   const rating = parseInt(checked.value,10);
-  const explanation = document.getElementById('explain').value.trim();
+  const explanation = screen.querySelector('#explain').value.trim();
   if (rating < 6 && explanation.length < CONFIG.effortMinChars){
-    document.getElementById('expReq').style.display = 'block';
+    screen.querySelector('#expReq').style.display = 'block';
     return;
   }
 
@@ -534,6 +539,7 @@ async function finishAndSave(){
     alert(e.message);
     throw e;
   }
+  console.log('Example trial:', state.trials[0]);
 
   // start → practice flow
   document.getElementById('startBtn').addEventListener('click', ()=>{
